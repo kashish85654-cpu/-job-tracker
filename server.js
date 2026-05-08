@@ -1,50 +1,61 @@
 const express = require('express');
-const Database = require('better-sqlite3');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
-const db = new Database('jobs.db');
-
 app.use(cors());
 app.use(express.json());
 
-// Create table
-db.exec(`
-  CREATE TABLE IF NOT EXISTS jobs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    company TEXT NOT NULL,
-    role TEXT NOT NULL,
-    status TEXT DEFAULT 'Applied',
-    date TEXT DEFAULT CURRENT_DATE,
-    notes TEXT
-  )
-`);
+const DB_FILE = path.join(__dirname, 'jobs.json');
 
-// Get all jobs
+const readJobs = () => {
+  if (!fs.existsSync(DB_FILE)) return [];
+  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+};
+
+const writeJobs = (jobs) => {
+  fs.writeFileSync(DB_FILE, JSON.stringify(jobs, null, 2));
+};
+
 app.get('/jobs', (req, res) => {
-  const jobs = db.prepare('SELECT * FROM jobs').all();
-  res.json(jobs);
+  res.json(readJobs());
 });
 
-// Add job
 app.post('/jobs', (req, res) => {
-  const { company, role, status, notes } = req.body;
-  const stmt = db.prepare('INSERT INTO jobs (company, role, status, notes) VALUES (?, ?, ?, ?)');
-  const result = stmt.run(company, role, status || 'Applied', notes || '');
-  res.json({ id: result.lastInsertRowid, company, role, status, notes });
+  const jobs = readJobs();
+  const newJob = {
+    id: Date.now(),
+    company: req.body.company,
+    role: req.body.role,
+    status: req.body.status || 'Applied',
+    notes: req.body.notes || '',
+    date: new Date().toISOString().split('T')[0]
+  };
+  jobs.push(newJob);
+  writeJobs(jobs);
+  res.json(newJob);
 });
 
-// Update status
 app.put('/jobs/:id', (req, res) => {
-  const { status } = req.body;
-  db.prepare('UPDATE jobs SET status = ? WHERE id = ?').run(status, req.params.id);
+  const jobs = readJobs();
+  const job = jobs.find(j => j.id == req.params.id);
+  if (job) job.status = req.body.status;
+  writeJobs(jobs);
   res.json({ success: true });
 });
 
-// Delete job
 app.delete('/jobs/:id', (req, res) => {
-  db.prepare('DELETE FROM jobs WHERE id = ?').run(req.params.id);
+  let jobs = readJobs();
+  jobs = jobs.filter(j => j.id != req.params.id);
+  writeJobs(jobs);
   res.json({ success: true });
 });
 
-app.listen(5000, () => console.log('Server running on port 5000'));
+app.use(express.static(path.join(__dirname, 'client/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/dist/index.html'));
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
