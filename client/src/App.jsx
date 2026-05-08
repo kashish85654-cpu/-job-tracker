@@ -17,13 +17,12 @@ function App() {
       const res = await axios.get("http://localhost:5000/jobs");
       setJobs(res.data);
     } catch(err) {
-      alert("Backend se connect nahi ho raha: " + err.message);
+      console.log("Error fetching jobs:", err.message);
     }
   };
 
   const addJob = async () => {
-    console.log("Add job clicked", form);
-    if (!form.company || !form.role) return alert("Company aur Role bharo!");
+    if (!form.company || !form.role) return alert("Please fill Company and Role!");
     try {
       await axios.post("http://localhost:5000/jobs", form);
       setForm({ company: "", role: "", status: "Applied", notes: "" });
